@@ -11,27 +11,34 @@ logger = logging.getLogger("demo_step1")
 
 
 def main():
-    from src.ingestion.fetcher import CelesTrakFetcher
+    from src.ingestion.fetcher import SpaceTrackFetcher, load_tle_file
     from src.propagation.propagator import SGP4Propagator
 
+    ST_USER = "fadel.longhorn@gmail.com"   
+    ST_PASS = "Fadellonghorn123"      
     cache_dir = Path("data/raw")
     output_dir = Path("data/processed")
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Fetch TLE(s)
     logger.info("===Fetch TLE(s)===")
-    fetcher = CelesTrakFetcher(cache_dir=cache_dir)
+    fetcher = SpaceTrackFetcher(username=ST_USER, password=ST_PASS, cache_dir=cache_dir)
 
-    logger.info("Fetching ISS by Norad ID")
-    iss = fetcher.fetch_by_norad_id(25544)
+    logger.info("Fetching ISS by NORAD ID")
+    iss_list = fetcher.fetch_by_norad_ids([25544])
+    if not iss_list:
+        logger.error("Failed to fetch ISS TLE")
+        return
+    iss = iss_list[0]
     print(f"\n Fetched: {iss}")
 
-    logger.info("Fetching Starlink Catalog...")
-    starlink = fetcher.fetch_catalog("starlink")[:10]
+    logger.info("Fetching Starlink TLEs (10 objects)...")
+    starlink_ids = list(range(44235, 44245))
+    starlink = fetcher.fetch_by_norad_ids(starlink_ids)
     print(f" Fetched {len(starlink)} Starlink TLE(s)")
     for tle in starlink[:3]:
         print(f"    {tle}")
-    
+
     # Propagate
     logger.info("\n=== Propagate ===")
     prop = SGP4Propagator(frame="teme")
@@ -67,7 +74,7 @@ def main():
             f"alt: {min(altitudes):.1f}–{max(altitudes):.1f} km  "
             f"steps: {len(traj.states)}"
         )
-    
+
     # Saving Sample
     logger.info("\n=== Save Sample Trajectory ===")
 
@@ -78,7 +85,7 @@ def main():
         "t_start": iss_traj.t_start.isoformat(),
         "t_end": iss_traj.t_end.isoformat(),
         "num_states": len(iss_traj.states),
-        "sample_states":[
+        "sample_states": [
             {
                 "epoch": sv.epoch.isoformat(),
                 "position_km": sv.position.tolist(),
